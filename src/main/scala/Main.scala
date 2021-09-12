@@ -38,13 +38,13 @@ object Main extends IOApp.Simple:
     Command.Face(dir)
 
   def move(d: Direction): Command[Idle, Idle] =
-    face(d) ~> start ~> stop
+    face(d) ~> start ~> stop ~> start ~> stop
 
   def parseCommand(cmd: Command[_, _]): String = cmd match
     case Command.Stop => "stopped"
     case Command.Start => "started"
     case Command.Face(d) => s"facing ${label(d)}"
-    case Command.Chain(cmd1, cmd2) => s"chain of $cmd1 and $cmd2"
+    case Command.Chain(cmd1, cmd2) => parseCommand(cmd1) |+| s" and ${parseCommand(cmd2)}"
   
   def run: IO[Unit] =
     IO.println(parseCommand(move(Direction.North)))
