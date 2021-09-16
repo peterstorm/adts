@@ -52,6 +52,14 @@ object Main extends IOApp.Simple:
           PersonF(f(a.a))
       }
 
+    implicit def optionWriter[A](writer: JsonWriter[A]): JsonWriter[Option[A]] =
+      new JsonWriter[Option[A]] {
+        def write(o: Option[A]): JSON =
+          o match
+            case None => JsNull
+            case Some(a) => writer.write(a)
+      }
+
     implicit class PersonfFunctorOps[PersonF[_], A](p: PersonF[A]) {
       def map[B](f: A => B)(implicit functor: Functor[PersonF]): PersonF[B] =
         functor.map(p)(f)
@@ -66,6 +74,10 @@ object Main extends IOApp.Simple:
     extension[A](a: PersonF[A])
       def map[B](f: A => B): PersonF[B] =
         summon[Functor[PersonF]].map(a)(f)
+
+    extension[F[_]: Functor, A](fa: F[A])
+      def map[B](f: A => B): F[B] =
+        summon[Functor[F]].map(fa)(f)
 
     given Traverse[PersonF] with
       def traverse[F[_]: Applicative, A, B](a: PersonF[A])(f: A => F[B]): F[PersonF[B]] =
@@ -87,6 +99,10 @@ object Main extends IOApp.Simple:
     given JsonWriter[Person] with
       def write(a: Person): JSON =
         JsObject(Map("name" -> JsString(a.name)))
+
+    extension[A](a: A)
+      def toJson(using w: JsonWriter[A]): JSON =
+        w.write(a)
 
 
   object scala2Instances:
@@ -152,10 +168,12 @@ object Main extends IOApp.Simple:
     case Command.Chain(cmd1, cmd2) => parseCommand(cmd1) |+| s" and ${parseCommand(cmd2)}"
 
   import scala3Instances._
+  import scala3Instances.given
   import jsonSyntax._
   
   def run: IO[Unit] =
     IO.println(parseCommand(move(Direction.North))) >>
+    IO.println(Person("Peter").toJson) >>
     IO.println(PersonF(2).map(_ + 1)) >>
     IO.println(PersonF(2).foldLeft(0)(_ + _)) >>
     IO.println(myFoldLeft((0 to 100), 0)(_ + _)) >>
