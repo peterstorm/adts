@@ -8,6 +8,17 @@ import cats.Eval
 
 object Main extends IOApp.Simple:
 
+  def myFoldLeft[A, B](xs: Seq[A], b: B)(f: (B, A) => B): B =
+    def withAccum(xs: Seq[A], acc: B): B = xs match
+      case Seq() => acc
+      case x +: xs => withAccum(xs, f(acc, x))
+    withAccum(xs, b)
+
+  def myMap[A, B](xs: Seq[A])(f: A => B): Seq[B] =
+    xs match
+      case Seq() => Seq()
+      case x +: xs => f(x) +: myMap(xs)(f)
+
   sealed trait JSON
   final case class JsObject(get: Map[String, JSON]) extends JSON
   final case class JsString(get: String) extends JSON
@@ -146,4 +157,6 @@ object Main extends IOApp.Simple:
   def run: IO[Unit] =
     IO.println(parseCommand(move(Direction.North))) >>
     IO.println(PersonF(2).map(_ + 1)) >>
-    IO.println(PersonF(2).foldLeft(0)(_ + _))
+    IO.println(PersonF(2).foldLeft(0)(_ + _)) >>
+    IO.println(myFoldLeft((0 to 100), 0)(_ + _)) >>
+    IO.println(myMap(List(1,2,3,4))(_ + 1))
