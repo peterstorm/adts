@@ -1,8 +1,102 @@
 import cats.effect.{IO, IOApp}
 import cats.effect.kernel.Async
 import cats.syntax.all._
+import cats.Functor
+import cats.Traverse
+import cats.Applicative
+import cats.Eval
 
 object Main extends IOApp.Simple:
+
+  sealed trait JSON
+  final case class JsObject(get: Map[String, JSON]) extends JSON
+  final case class JsString(get: String) extends JSON
+  final case class JsNumber(get: Double) extends JSON
+  case object JsNull extends JSON
+
+  trait JsonWriter[A]:
+    
+    def write(a: A): JSON
+
+  opaque type Name = String
+
+  object Name:
+
+    def apply(value: String): Name = value
+
+
+  final case class Person(
+    name: Name
+  )
+
+  final case class PersonF[A](
+    a: A
+  )
+
+  object PersonFscala2:
+
+    implicit val personfFunctor: Functor[PersonF] =
+      new Functor[PersonF] {
+        def map[A, B](a: PersonF[A])(f: A => B): PersonF[B] =
+          PersonF(f(a.a))
+      }
+
+    implicit class PersonfFunctorOps[PersonF[_], A](p: PersonF[A]) {
+      def map[B](f: A => B)(implicit functor: Functor[PersonF]): PersonF[B] =
+        functor.map(p)(f)
+    }
+
+  object PersonF:
+
+    given Functor[PersonF] with
+      def map[A, B](a: PersonF[A])(f: A => B): PersonF[B] =
+          PersonF(f(a.a))
+
+    extension[A](a: PersonF[A])
+      def map[B](f: A => B): PersonF[B] =
+        summon[Functor[PersonF]].map(a)(f)
+
+    given Traverse[PersonF] with
+      def traverse[F[_]: Applicative, A, B](a: PersonF[A])(f: A => F[B]): F[PersonF[B]] =
+        a match
+          case PersonF(a) => Applicative[F].map(f(a))(PersonF(_))
+
+      def foldLeft[A, B](a: PersonF[A], b: B)(f: (B, A) => B): B =
+        a match
+           case PersonF(a) => f(b, a)
+
+      def foldRight[A, B](a: PersonF[A], b: Eval[B])(f: (A, Eval[B]) => Eval[B]): Eval[B] = ???
+
+  object scala3Instances:
+
+    given JsonWriter[String] with
+      def write(a: String): JSON =
+        JsString(a)
+
+    given JsonWriter[Person] with
+      def write(a: Person): JSON =
+        JsObject(Map("name" -> JsString(a.name)))
+
+
+  object scala2Instances:
+
+    implicit val stringWriter: JsonWriter[String] =
+      new JsonWriter[String] {
+        def write(a: String): JSON = JsString(a)
+      }
+
+    implicit val personWriter: JsonWriter[Person] =
+      new JsonWriter[Person] {
+        def write(a: Person): JSON =
+          JsObject(Map("name" -> JsString(a.name)))
+      }
+
+  object jsonSyntax:
+
+    implicit class JsonWriterOps[A](a: A) {
+      def toJson(implicit w: JsonWriter[A]): JSON =
+        w.write(a)
+    }
 
   enum Direction:
     case North, East, South, West
@@ -45,6 +139,11 @@ object Main extends IOApp.Simple:
     case Command.Start => "started"
     case Command.Face(d) => s"facing ${label(d)}"
     case Command.Chain(cmd1, cmd2) => parseCommand(cmd1) |+| s" and ${parseCommand(cmd2)}"
+
+  import scala3Instances._
+  import jsonSyntax._
   
   def run: IO[Unit] =
-    IO.println(parseCommand(move(Direction.North)))
+    IO.println(parseCommand(move(Direction.North))) >>
+    IO.println(PersonF(2).map(_ + 1)) >>
+    IO.println(PersonF(2).foldLeft(0)(_ + _))
